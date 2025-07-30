@@ -4,7 +4,7 @@
 function triggerTableauRefresh() {
   // 1. Вставте сюди URL вашого сервісу на Render
   //    Формат: https://your-app-name.onrender.com/refresh-tableau
-  const renderUrl = "https://your-app-name.onrender.com/refresh-tableau"; 
+  const renderUrl = "https://opportunities-for-communities-and-businesses.onrender.com/refresh-tableau"; 
 
   // 2. Вставте сюди ваш секретний ключ, який ви вказали на Render
   const apiKey = "super-secret-12345";
