@@ -1,68 +1,77 @@
-/**
- * Викликає Python-скрипт на Render для оновлення дашборду Tableau.
- */
-function triggerTableauRefresh() {
-  // 1. Вставте сюди URL вашого сервісу на Render
-  //    Формат: https://your-app-name.onrender.com/refresh-tableau
-  const renderUrl = "https://opportunities-for-communities-and-businesses.onrender.com/refresh-tableau"; 
+import os
+import requests
+from flask import Flask, request, jsonify
 
-  // 2. Вставте сюди ваш секретний ключ, який ви вказали на Render
-  const apiKey = "super-secret-12345";
+app = Flask(__name__)
 
-  // 3. (Опціонально) Дані, які можна передати в Python.
-  //    Наш поточний Python-скрипт не використовує ці дані, але це
-  //    може знадобитися в майбутньому.
-  const payloadData = {
-    'source': 'Google Sheets Trigger',
-    'user': Session.getActiveUser().getEmail()
-  };
+# --- Функція для вилучення XSRF-TOKEN з cookie ---
+# Tableau вимагає цей токен не тільки в cookie, але і в заголовку X-XSRF-TOKEN
+def get_xsrf_token_from_cookie(cookie_string):
+    if not cookie_string:
+        return None
+    try:
+        # Розділяємо рядок cookie на окремі частини
+        cookies = cookie_string.split('; ')
+        for cookie in cookies:
+            if cookie.startswith('XSRF-TOKEN='):
+                return cookie.split('=')[1]
+        return None
+    except Exception:
+        return None
 
-  // Налаштування для HTTP POST-запиту
-  const options = {
-    'method': 'post',
-    'contentType': 'application/json',
-    'headers': {
-      // Цей заголовок використовується для авторизації в нашому Python-скрипті
-      'X-API-Key': apiKey
-    },
-    // Перетворюємо об'єкт JavaScript в рядок формату JSON
-    'payload': JSON.stringify(payloadData),
-    // Важливо! Дозволяє нам бачити повний текст помилки, якщо вона станеться
-    'muteHttpExceptions': true 
-  };
-
-  try {
-    // Виконуємо запит
-    const response = UrlFetchApp.fetch(renderUrl, options);
+# --- Головний ендпоінт для запуску оновлення ---
+@app.route('/refresh-tableau', methods=['POST'])
+def refresh_tableau():
+    # 1. Зчитуємо всі наші секрети та налаштування зі змінних середовища Render
+    my_api_key = os.environ.get("MY_API_KEY")
+    post_url = os.environ.get("TABLEAU_POST_URL")
+    cookie_header = os.environ.get("TABLEAU_HEADERS_COOKIE")
+    workbook_id = os.environ.get("TABLEAU_WORKBOOK_ID")
     
-    const responseCode = response.getResponseCode();
-    const responseBody = response.getContentText();
-    
-    // Виводимо результат у логи Apps Script (Ctrl + Enter)
-    Logger.log(`HTTP Status Code: ${responseCode}`);
-    Logger.log(`Response Body: ${responseBody}`);
+    # Перевірка безпеки: чи надіслав Apps Script правильний ключ?
+    if request.headers.get('X-API-Key') != my_api_key:
+        return jsonify({"error": "Unauthorized"}), 401
 
-    // Показуємо спливаюче вікно з результатом
-    if (responseCode === 200) {
-      const jsonResponse = JSON.parse(responseBody);
-      SpreadsheetApp.getUi().alert(`✅ Успіх!\n\nПовідомлення від Python: ${jsonResponse.message}`);
-    } else {
-      SpreadsheetApp.getUi().alert(`❌ Помилка ${responseCode}\n\nВідповідь сервера:\n${responseBody}`);
+    # Перевірка, чи всі змінні середовища налаштовані на Render
+    if not all([post_url, cookie_header, workbook_id]):
+        return jsonify({"error": "Server is not configured. Missing environment variables."}), 500
+        
+    xsrf_token = get_xsrf_token_from_cookie(cookie_header)
+    if not xsrf_token:
+        return jsonify({"error": "Failed to parse XSRF-TOKEN from cookie"}), 500
+
+    # 2. Готуємо заголовки та тіло запиту для Tableau
+    headers = {
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json;charset=UTF-8',
+        'Cookie': cookie_header,
+        'X-XSRF-TOKEN': xsrf_token, # Дуже важливий заголовок
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
     }
     
-  } catch (e) {
-    Logger.log(`Не вдалося виконати запит: ${e.toString()}`);
-    SpreadsheetApp.getUi().alert(`Критична помилка:\n${e.toString()}`);
-  }
-}
+    # Тіло запиту (payload). Tableau очікує ID воркбука
+    payload = {
+        "workbookId": workbook_id
+    }
 
-/**
- * Додає кастомне меню в інтерфейс Google Таблиць
- * для ручного запуску оновлення.
- */
-function onOpen() {
-  SpreadsheetApp.getUi()
-      .createMenu('Tableau')
-      .addItem('Оновити дашборд', 'triggerTableauRefresh')
-      .addToUi();
-}
+    # 3. Відправляємо запит на сервер Tableau
+    try:
+        response = requests.post(post_url, headers=headers, json=payload)
+        response.raise_for_status() # Генерує помилку, якщо статус-код відповіді > 400
+
+        # Повертаємо успішну відповідь
+        return jsonify({
+            "status": "success", 
+            "message": "Refresh request sent to Tableau successfully.",
+            "tableau_response": response.json() # Повертаємо відповідь від Tableau
+        })
+
+    except requests.exceptions.RequestException as e:
+        # Повертаємо помилку, якщо запит до Tableau не вдався
+        return jsonify({"error": f"Failed to send request to Tableau: {e}"}), 500
+
+
+# --- Допоміжний ендпоінт для перевірки роботи сервісу ---
+@app.route('/')
+def index():
+    return "Tableau Refresh Service is running!"
