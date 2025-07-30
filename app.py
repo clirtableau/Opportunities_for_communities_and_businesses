@@ -1,62 +1,76 @@
 import os
 import requests
+import time
 from flask import Flask, request, jsonify
+
+# Імпортуємо бібліотеки для Selenium
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
 
-# --- Функція для входу в Tableau та отримання сесії ---
+# --- Оновлена функція для входу в Tableau за допомогою Selenium ---
 def get_tableau_session(username, password):
     """
-    Створює сесію, логіниться в Tableau Public і повертає
-    автентифікований об'єкт сесії.
+    Запускає віртуальний браузер, логіниться в Tableau і повертає
+    автентифікований об'єкт сесії requests.
     """
-    session = requests.Session()
-    login_url = "https://public.tableau.com/auth/login"
+    print("Налаштування віртуального браузера...")
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Запуск без графічного інтерфейсу
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
 
-    # 1. Перший GET-запит, щоб отримати початковий XSRF-TOKEN в cookie
     try:
-        session.get(login_url, timeout=30)
-        initial_xsrf_token = session.cookies.get('XSRF-TOKEN')
-        if not initial_xsrf_token:
-            raise ValueError("Не вдалося отримати початковий XSRF-TOKEN.")
-    except requests.RequestException as e:
-        print(f"Помилка при отриманні сторінки входу: {e}")
-        return None
-
-    # 2. Готуємо дані та заголовки для POST-запиту на вхід
-    login_payload = {
-        'username': username,
-        'password': password,
-        'workgroup': '',
-        'csrf_token': initial_xsrf_token,
-    }
-    
-    headers = {
-        'X-XSRF-TOKEN': initial_xsrf_token,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-    }
-
-    # 3. Відправляємо POST-запит, щоб залогінитись
-    try:
-        login_response = session.post(login_url, data=login_payload, headers=headers, timeout=30)
-        login_response.raise_for_status()
+        # Використовуємо webdriver-manager для автоматичного завантаження драйвера
+        service = ChromeService(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        print("Браузер запущено.")
         
-        # Перевіряємо, чи успішний вхід (Tableau повертає JSON з полем 'redirectPath')
-        if 'redirectPath' not in login_response.json():
-             raise ValueError("Відповідь Tableau не містить ознаки успішного входу.")
-             
-        return session # Повертаємо сесію з новими, автентифікованими cookie
+        login_url = "https://public.tableau.com/auth/login"
+        print(f"Переходжу на сторінку входу: {login_url}")
+        driver.get(login_url)
+        time.sleep(4) # Даємо час на виконання JavaScript та завантаження сторінки
+
+        # 1. Знаходимо поля та вводимо логін і пароль
+        print("Вводжу логін та пароль...")
+        driver.find_element(By.NAME, "username").send_keys(username)
+        driver.find_element(By.NAME, "password").send_keys(password)
         
-    except requests.RequestException as e:
-        print(f"Помилка під час запиту на вхід: {e}")
-        print(f"Відповідь сервера: {login_response.text if 'login_response' in locals() else 'Немає відповіді'}")
+        # 2. Знаходимо та натискаємо кнопку входу
+        # Використовуємо XPath для надійного пошуку кнопки
+        driver.find_element(By.XPATH, "//button[normalize-space()='Sign In']").click()
+        print("Натиснув кнопку 'Sign In'.")
+        time.sleep(6) # Чекаємо на завершення процесу входу
+
+        # 3. Перевіряємо, чи вхід був успішним (наприклад, перевіряючи URL)
+        if "auth/login" in driver.current_url:
+            raise ValueError("Вхід не вдався. Залишився на сторінці логіну. Перевірте логін/пароль.")
+        print("Вхід виглядає успішним.")
+
+        # 4. Створюємо сесію requests та переносимо в неї автентифіковані cookie
+        session = requests.Session()
+        selenium_cookies = driver.get_cookies()
+        for cookie in selenium_cookies:
+            session.cookies.set(cookie['name'], cookie['value'])
+        
+        return session
+
+    except Exception as e:
+        print(f"Сталася помилка в процесі Selenium: {e}")
         return None
-    except ValueError as e:
-        print(f"Помилка логіки входу: {e}")
-        return None
+    finally:
+        if 'driver' in locals():
+            driver.quit()
+            print("Браузер закрито.")
 
 
-# --- Головний ендпоінт для запуску оновлення ---
+# --- Головний ендпоінт для запуску оновлення (залишається майже без змін) ---
 @app.route('/refresh-tableau', methods=['POST'])
 def refresh_tableau():
     # 1. Зчитуємо секрети та налаштування зі змінних середовища Render
@@ -85,6 +99,9 @@ def refresh_tableau():
     # 3. Готуємо та відправляємо запит на оновлення, використовуючи нову сесію
     try:
         refresh_xsrf_token = tableau_session.cookies.get('XSRF-TOKEN')
+        if not refresh_xsrf_token:
+            raise ValueError("Не вдалося знайти XSRF-TOKEN в сесії після входу.")
+
         headers = {
             'Accept': 'application/json, text/plain, */*',
             'Content-Type': 'application/json;charset=UTF-8',
@@ -104,7 +121,7 @@ def refresh_tableau():
             "tableau_response": response.json()
         })
 
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         error_message = f"Failed to send refresh request to Tableau: {e}"
         print(error_message)
         return jsonify({"error": error_message}), 500
