@@ -35,7 +35,8 @@ def get_tableau_session(username, password):
         login_url = "https://public.tableau.com/auth/login"
         print(f"Переходжу на сторінку входу: {login_url}")
         driver.get(login_url)
-        time.sleep(4) # Даємо час на виконання JavaScript та завантаження сторінки
+        # ЗБІЛЬШЕНО ЧАС ОЧІКУВАННЯ
+        time.sleep(5) # Даємо час на виконання JavaScript та завантаження сторінки
 
         # 1. Знаходимо поля та вводимо логін і пароль
         print("Вводжу логін та пароль...")
@@ -46,10 +47,16 @@ def get_tableau_session(username, password):
         # Використовуємо XPath для надійного пошуку кнопки
         driver.find_element(By.XPATH, "//button[normalize-space()='Sign In']").click()
         print("Натиснув кнопку 'Sign In'.")
-        time.sleep(6) # Чекаємо на завершення процесу входу
+        # ЗБІЛЬШЕНО ЧАС ОЧІКУВАННЯ
+        time.sleep(10) # Чекаємо на завершення процесу входу
 
         # 3. Перевіряємо, чи вхід був успішним (наприклад, перевіряючи URL)
         if "auth/login" in driver.current_url:
+            # ДОДАНО ДЕТАЛЬНЕ ЛОГУВАННЯ
+            print("!!! Вхід не вдався. Залишився на сторінці логіну. Перевірте логін/пароль або наявність CAPTCHA.")
+            print("--- HTML-код сторінки, що не вдалося завантажити: ---")
+            print(driver.page_source)
+            print("-------------------------------------------------")
             raise ValueError("Вхід не вдався. Залишився на сторінці логіну. Перевірте логін/пароль.")
         print("Вхід виглядає успішним.")
 
