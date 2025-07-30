@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: opportunities-for-communities-and
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app"
+    buildpacks:
+      - https://github.com/heroku/heroku-buildpack-google-chrome
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.8 # Можна вказати конкретну версію Python
+      - fromGroup: tableau-credentials
+
+envVarGroups:
+  - name: tableau-credentials
+    envVars:
+      - key: MY_API_KEY
+        value: super-secret-12345
+      - key: TABLEAU_USERNAME
+        value: clir.tableau@gmail.com
+      - key: TABLEAU_PASSWORD
+        value: awes0MIUacc_24
+      - key: TABLEAU_POST_URL
+        value: https://public.tableau.com/profile/api/workbook/request_extract_refresh
+      - key: TABLEAU_WORKBOOK_ID
+        value: 49f38034-8408-4682-90f1-dbf6d81cbe59
