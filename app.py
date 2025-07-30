@@ -3,7 +3,7 @@ import requests
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-
+# Triggering a redeploy
 # --- Функція для вилучення XSRF-TOKEN з cookie ---
 # Tableau вимагає цей токен не тільки в cookie, але і в заголовку X-XSRF-TOKEN
 def get_xsrf_token_from_cookie(cookie_string):
