@@ -3,7 +3,7 @@ import requests
 import time
 from flask import Flask, request, jsonify
 
-# Імпортуємо бібліотеки для Selenium
+# Імпортуємо бібліотеки для Seleniumа
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service as ChromeService
 from selenium.webdriver.common.by import By
