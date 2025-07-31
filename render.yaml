@@ -1,19 +1,20 @@
+# Оновлена версія файлу render.yaml для роботи з Playwright.
+
 services:
   - type: web
-    name: opportunities-for-communities-and
+    name: tableau-refresh-bot 
     env: python
-    buildCommand: "pip install -r requirements.txt"
+    plan: free
+    region: oregon 
+    
+    # ВАЖЛИВО: Оновлена команда збірки для встановлення Playwright та його браузерів
+    buildCommand: "pip install -r requirements.txt && playwright install --with-deps"
     startCommand: "gunicorn app:app"
-    buildpacks:
-      - https://github.com/heroku/heroku-buildpack-google-chrome
+      
+    # Ваші змінні середовища
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.8 # Можна вказати конкретну версію Python
-      - fromGroup: tableau-credentials
-
-envVarGroups:
-  - name: tableau-credentials
-    envVars:
+        value: 3.11.8
       - key: MY_API_KEY
         value: super-secret-12345
       - key: TABLEAU_USERNAME
