@@ -3,78 +3,64 @@ import requests
 import time
 from flask import Flask, request, jsonify
 
-# Імпортуємо бібліотеки для Seleniumа
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
+# Імпортуємо бібліотеку Playwright
+from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
-# --- Оновлена функція для входу в Tableau за допомогою Selenium ---
+# --- Оновлена функція для входу в Tableau за допомогою Playwright ---
 def get_tableau_session(username, password):
     """
-    Запускає віртуальний браузер, логіниться в Tableau і повертає
-    автентифікований об'єкт сесії requests.
+    Запускає віртуальний браузер за допомогою Playwright, логіниться в Tableau
+    і повертає автентифікований об'єкт сесії requests.
     """
-    print("Налаштування віртуального браузера...")
-    chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Запуск без графічного інтерфейсу
-    chrome_options.add_argument("--no-sandbox")
-    chrome_options.add_argument("--disable-dev-shm-usage")
-    chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36")
-
+    print("Запуск сесії Playwright...")
     try:
-        # Використовуємо webdriver-manager для автоматичного завантаження драйвера
-        service = ChromeService(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=chrome_options)
-        print("Браузер запущено.")
-        
-        login_url = "https://public.tableau.com/auth/login"
-        print(f"Переходжу на сторінку входу: {login_url}")
-        driver.get(login_url)
-        # ЗБІЛЬШЕНО ЧАС ОЧІКУВАННЯ
-        time.sleep(5) # Даємо час на виконання JavaScript та завантаження сторінки
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            print("Браузер запущено.")
 
-        # 1. Знаходимо поля та вводимо логін і пароль
-        print("Вводжу логін та пароль...")
-        driver.find_element(By.NAME, "username").send_keys(username)
-        driver.find_element(By.NAME, "password").send_keys(password)
-        
-        # 2. Знаходимо та натискаємо кнопку входу
-        # Використовуємо XPath для надійного пошуку кнопки
-        driver.find_element(By.XPATH, "//button[normalize-space()='Sign In']").click()
-        print("Натиснув кнопку 'Sign In'.")
-        # ЗБІЛЬШЕНО ЧАС ОЧІКУВАННЯ
-        time.sleep(10) # Чекаємо на завершення процесу входу
+            login_url = "https://public.tableau.com/auth/login"
+            print(f"Переходжу на сторінку входу: {login_url}")
+            page.goto(login_url, timeout=60000) # Збільшено таймаут до 60с
+            time.sleep(5)
 
-        # 3. Перевіряємо, чи вхід був успішним (наприклад, перевіряючи URL)
-        if "auth/login" in driver.current_url:
-            # ДОДАНО ДЕТАЛЬНЕ ЛОГУВАННЯ
-            print("!!! Вхід не вдався. Залишився на сторінці логіну. Перевірте логін/пароль або наявність CAPTCHA.")
-            print("--- HTML-код сторінки, що не вдалося завантажити: ---")
-            print(driver.page_source)
-            print("-------------------------------------------------")
-            raise ValueError("Вхід не вдався. Залишився на сторінці логіну. Перевірте логін/пароль.")
-        print("Вхід виглядає успішним.")
+            # 1. Знаходимо поля та вводимо логін і пароль
+            print("Вводжу логін та пароль...")
+            page.locator('input[name="username"]').fill(username)
+            page.locator('input[name="password"]').fill(password)
+            
+            # 2. Знаходимо та натискаємо кнопку входу
+            page.locator("button:has-text('Sign In')").click()
+            print("Натиснув кнопку 'Sign In'.")
+            
+            # Чекаємо на завершення навігації після входу
+            page.wait_for_load_state('networkidle', timeout=60000)
+            time.sleep(5)
 
-        # 4. Створюємо сесію requests та переносимо в неї автентифіковані cookie
-        session = requests.Session()
-        selenium_cookies = driver.get_cookies()
-        for cookie in selenium_cookies:
-            session.cookies.set(cookie['name'], cookie['value'])
-        
-        return session
+            # 3. Перевіряємо, чи вхід був успішним
+            if "auth/login" in page.url:
+                print("!!! Вхід не вдався. Залишився на сторінці логіну.")
+                print("--- HTML-код сторінки: ---")
+                print(page.content())
+                print("--------------------------")
+                raise ValueError("Вхід не вдався. Перевірте логін/пароль або наявність CAPTCHA.")
+            
+            print("Вхід виглядає успішним.")
+
+            # 4. Створюємо сесію requests та переносимо в неї cookie
+            session = requests.Session()
+            browser_cookies = page.context.cookies()
+            for cookie in browser_cookies:
+                session.cookies.set(cookie['name'], cookie['value'])
+            
+            browser.close()
+            return session
 
     except Exception as e:
-        print(f"Сталася помилка в процесі Selenium: {e}")
+        print(f"Сталася помилка в процесі Playwright: {e}")
         return None
-    finally:
-        if 'driver' in locals():
-            driver.quit()
-            print("Браузер закрито.")
 
 
 # --- Головний ендпоінт для запуску оновлення (залишається майже без змін) ---
