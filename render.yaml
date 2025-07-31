@@ -8,7 +8,8 @@ services:
     region: oregon 
     
     # ВАЖЛИВО: Оновлена команда збірки для встановлення Playwright та його браузерів
-    buildCommand: "pip install -r requirements.txt && playwright install --with-deps"
+    # Ми використовуємо більш специфічну команду для встановлення лише Chromium.
+    buildCommand: "pip install -r requirements.txt && playwright install chromium"
     startCommand: "gunicorn app:app"
       
     # Ваші змінні середовища
