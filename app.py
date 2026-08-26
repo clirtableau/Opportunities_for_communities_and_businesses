@@ -4,8 +4,12 @@ from bs4 import BeautifulSoup
 URL = "https://www.kmu.gov.ua/mizhnarodna-tehnichna-dopomoga/perelik-zareiestrovanih-proiektiv-z-planami-zakupivel"
 STATE_FILE = "last_known_url.txt"
 
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+}
+
 def get_current_file_url():
-    response = requests.get(URL)
+    response = requests.get(URL,  headers=headers)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
 
