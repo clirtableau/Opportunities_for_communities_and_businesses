@@ -11,6 +11,11 @@ headers = {
 def get_current_file_url():
     response = requests.get(URL, headers=headers)
     response.raise_for_status()
+    
+    print(f"Статус відповіді: {response.status_code}")
+    print(f"Довжина HTML: {len(response.text)}")
+    print(response.text[:500])
+    
     soup = BeautifulSoup(response.text, "html.parser")
 
     for link in soup.find_all("a", href=True):
