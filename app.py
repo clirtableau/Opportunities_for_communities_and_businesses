@@ -31,6 +31,8 @@ def save_current_url(url):
         f.write(url)
 
 current_url = get_current_file_url()
+if current_url is None:
+    raise ValueError("Не вдалося знайти посилання на файл — перевір текст пошуку")
 last_url = get_last_known_url()
 
 if current_url != last_url:
