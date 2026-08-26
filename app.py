@@ -9,13 +9,14 @@ headers = {
 }
 
 def get_current_file_url():
-    response = requests.get(URL,  headers=headers)
+    response = requests.get(URL, headers=headers)
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
 
-    # Шукаємо посилання саме за текстом всередині <span>
     for link in soup.find_all("a", href=True):
-        if "Перелік проєктів МТД" in link.get_text():
+        text = link.get_text(strip=True)
+        print(f"Знайдено посилання: '{text}' -> {link['href']}")
+        if "Перелік проектів МТД" in text:
             return link["href"]
     return None
 
