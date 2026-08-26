@@ -1,19 +1,12 @@
 name: Check MTD file update
-
 on:
   schedule:
-    - cron: '0 8 * * *'  # щодня о 8:00 UTC (11:00 за Києвом)
-  workflow_dispatch:  # дозволяє запустити вручну кнопкою на GitHub
-
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          playwright install --with-deps chromium
-    
       - name: Checkout repo
         uses: actions/checkout@v4
 
@@ -23,7 +16,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
 
       - name: Run script
         run: python app.py
