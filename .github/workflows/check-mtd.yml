@@ -9,6 +9,11 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+    
       - name: Checkout repo
         uses: actions/checkout@v4
 
